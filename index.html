@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Shell Game - Correct Shuffle & Guess</title>
+<style>
+  body {
+    font-family: sans-serif;
+    text-align: center;
+    background: #f0f0f0;
+    margin: 0; padding: 0;
+  }
+  h1 {
+    margin-top: 20px;
+  }
+  #difficultyMenu {
+    margin-top: 40px;
+  }
+  #difficultyMenu button {
+    font-size: 18px;
+    padding: 15px 30px;
+    margin: 10px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background-color: #4caf50;
+    color: white;
+    transition: background-color 0.3s;
+  }
+  #difficultyMenu button:hover {
+    background-color: #388e3c;
+  }
+  #game {
+    position: relative;
+    height: 140px;
+    margin: 30px auto;
+    width: fit-content;
+    min-width: 300px;
+  }
+  .cup {
+    position: absolute;
+    width: 80px;
+    height: 100px;
+    background: brown;
+    border-radius: 10px;
+    transition: left 0.7s ease-in-out;
+  }
+  .ball {
+    width: 30px;
+    height: 30px;
+    background: red;
+    border-radius: 50%;
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  #buttons {
+    margin-top: 30px;
+  }
+  #buttons button {
+    font-size: 20px;
+    padding: 10px 20px;
+    margin: 5px;
+    border-radius: 10px;
+    border: none;
+    background: #4caf50;
+    color: white;
+    cursor: pointer;
+  }
+  #buttons button:disabled {
+    background: #888;
+    cursor: not-allowed;
+  }
+  #result {
+    font-size: 24px;
+    margin-top: 20px;
+    min-height: 30px;
+  }
+  #stats {
+    margin-top: 40px;
+  }
+  @media (max-width: 600px) {
+    .cup {
+      width: 60px;
+      height: 80px;
+    }
+    #buttons button {
+      width: 80px;
+      font-size: 16px;
+    }
+    #difficultyMenu button {
+      width: 90%;
+      max-width: 300px;
+      font-size: 18px;
+      padding: 12px 0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<h1>Shell Game</h1>
+
+<div id="difficultyMenu">
+  <h2>Select Difficulty</h2>
+  <button id="btn-easy">Easy (3 cups)</button>
+  <button id="btn-medium">Medium (5 cups)</button>
+  <button id="btn-hard">Hard (6 cups)</button>
+</div>
+
+<div id="game"></div>
+<div id="buttons"></div>
+<div id="result"></div>
+<div id="stats"></div>
+
+<script>
+  const difficultyMenu = document.getElementById('difficultyMenu');
+  const game = document.getElementById('game');
+  const buttons = document.getElementById('buttons');
+  const result = document.getElementById('result');
+  const stats = document.getElementById('stats');
+
+  let numCups = 3;
+  let ballPosition = 0;       // индекс чашки под которой шарик лежит (фиксированный)
+  let currentOrder = [];      // currentOrder[pos] = cupId, порядок чашек на позициях
+  let startTime = 0;
+  let wins = 0;
+  let plays = 0;
+  let bestStreak = 0;
+  let currentStreak = 0;
+  let totalReaction = 0;
+
+  const cupWidth = 80; 
+  const cupSpacing = 100; // px
+  const startX = 0;
+
+  function initGame() {
+    game.innerHTML = '';
+    buttons.innerHTML = '';
+    result.textContent = '';
+    disableButtons(true);
+
+    currentOrder = [];
+    for(let i = 0; i < numCups; i++) {
+      currentOrder.push(i);
+      const cup = document.createElement('div');
+      cup.classList.add('cup');
+      cup.id = 'cup-' + i;
+      cup.style.left = (startX + i * cupSpacing) + 'px';
+      game.appendChild(cup);
+    }
+
+    ballPosition = Math.floor(Math.random() * numCups);
+    showBall();
+
+    setTimeout(() => {
+      removeBall();
+      animateShuffle(() => {
+        createButtons();
+        disableButtons(false);
+        startTime = performance.now();
+        scrollToButtons();
+      });
+    }, 1500);
+  }
+
+  function showBall() {
+    const ball = document.createElement('div');
+    ball.classList.add('ball');
+    // шарик рисуется под чашкой с id ballPosition
+    const cup = document.getElementById('cup-' + ballPosition);
+    if (cup) {
+      cup.appendChild(ball);
+    }
+  }
+
+  function removeBall() {
+    const ball = document.querySelector('.ball');
+    if (ball) ball.remove();
+  }
+
+  function createButtons() {
+    buttons.innerHTML = '';
+    for(let i = 0; i < numCups; i++) {
+      const btn = document.createElement('button');
+      btn.textContent = 'Cup ' + (i + 1);
+      btn.onclick = () => guess(i);
+      buttons.appendChild(btn);
+    }
+  }
+
+  function disableButtons(flag) {
+    const btns = buttons.querySelectorAll('button');
+    btns.forEach(b => b.disabled = flag);
+  }
+
+  function guess(index) {
+    disableButtons(true);
+    const endTime = performance.now();
+    const reaction = endTime - startTime;
+    plays++;
+
+    // index - позиция, которую выбрал пользователь
+    // currentOrder[index] - cupId на этой позиции
+    // ballPosition - cupId с шариком
+    if(currentOrder[index] === ballPosition) {
+      wins++;
+      currentStreak++;
+      bestStreak = Math.max(bestStreak, currentStreak);
+      totalReaction += reaction;
+      result.textContent = '🎉 You found the ball!';
+    } else {
+      currentStreak = 0;
+      result.textContent = '❌ Wrong cup. Try again!';
+    }
+
+    showBall();
+    updateStats();
+
+    setTimeout(() => {
+      removeBall();
+      initGame();
+    }, 2000);
+  }
+
+  function updateStats() {
+    const winRate = plays ? ((wins / plays) * 100).toFixed(1) : 0;
+    const avgTime = wins ? (totalReaction / wins).toFixed(0) : 0;
+    stats.innerHTML = `
+      <h2>Stats</h2>
+      <p>Games played: ${plays}</p>
+      <p>Win rate: ${winRate}%</p>
+      <p>Best streak: ${bestStreak}</p>
+      <p>Avg. reaction time: ${avgTime} ms</p>
+    `;
+  }
+
+  function animateShuffle(callback) {
+    let count = 30;
+    const speed = 700;
+
+    let positions = [];
+    for(let i = 0; i < numCups; i++) {
+      positions[i] = startX + i * cupSpacing;
+    }
+
+    let interval = setInterval(() => {
+      if (count <= 0) {
+        clearInterval(interval);
+        // в конце сбрасываем transition и ставим чашки на правильные позиции
+        for(let i = 0; i < numCups; i++) {
+          const cupId = currentOrder[i];
+          const cup = document.getElementById('cup-' + cupId);
+          cup.style.transition = '';
+          cup.style.left = positions[i] + 'px';
+        }
+        callback();
+        return;
+      }
+
+      // Выбираем две разные позиции для обмена
+      let idx1 = Math.floor(Math.random() * numCups);
+      let idx2;
+      do {
+        idx2 = Math.floor(Math.random() * numCups);
+      } while (idx1 === idx2);
+
+      // Меняем порядок чашек местами
+      let tempOrder = currentOrder[idx1];
+      currentOrder[idx1] = currentOrder[idx2];
+      currentOrder[idx2] = tempOrder;
+
+      // Анимируем перемещение чашек
+      const cup1 = document.getElementById('cup-' + currentOrder[idx1]);
+      const cup2 = document.getElementById('cup-' + currentOrder[idx2]);
+
+      cup1.style.transition = `left ${speed}ms ease-in-out`;
+      cup2.style.transition = `left ${speed}ms ease-in-out`;
+
+      cup1.style.left = positions[idx1] + 'px';
+      cup2.style.left = positions[idx2] + 'px';
+
+      count--;
+    }, speed + 100);
+  }
+
+  function scrollToButtons() {
+    buttons.scrollIntoView({behavior:'smooth'});
+  }
+
+  document.getElementById('btn-easy').onclick = () => {
+    numCups = 3; resetStats(); difficultyMenu.style.display = 'none'; initGame();
+  };
+  document.getElementById('btn-medium').onclick = () => {
+    numCups = 5; resetStats(); difficultyMenu.style.display = 'none'; initGame();
+  };
+  document.getElementById('btn-hard').onclick = () => {
+    numCups = 6; resetStats(); difficultyMenu.style.display = 'none'; initGame();
+  };
+
+  function resetStats() {
+    wins = 0;
+    plays = 0;
+    bestStreak = 0;
+    currentStreak = 0;
+    totalReaction = 0;
+    updateStats();
+  }
+
+  updateStats();
+</script>
+
+</body>
+</html>
